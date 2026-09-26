@@ -16,6 +16,7 @@ class Preferences {
             "quitAppShortcut": defaultShortcut("Q"),
             "hideShowAppShortcut": defaultShortcut("H"),
             "searchShortcut": defaultShortcut("S"),
+            "showSearchHint": "true",
             "arrowKeysEnabled": "true",
             "vimKeysEnabled": "false",
             "mouseHoverEnabled": "false",
@@ -168,7 +169,25 @@ class Preferences {
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: defaultValues)
+        #if DEBUG
+        pinToDefaultsForQa()
+        #endif
     }
+
+    #if DEBUG
+    static var qaPristine: Bool { CommandLine.arguments.contains("--qa-pristine-prefs") }
+
+    /// `--qa-pristine-prefs`: every preference reads as its default unless the launch arguments say otherwise,
+    /// whatever this machine's debug build has saved. The QA suite's visual test needs Settings to look the
+    /// same on every run. Nothing saved is touched: the defaults are layered under the argument domain.
+    private static func pinToDefaultsForQa() {
+        guard qaPristine else { return }
+        let domain = UserDefaults.argumentDomain
+        let args = UserDefaults.standard.volatileDomain(forName: domain)
+        UserDefaults.standard.removeVolatileDomain(forName: domain)
+        UserDefaults.standard.setVolatileDomain(defaultValues.merging(args) { _, arg in arg }, forName: domain)
+    }
+    #endif
 
     static func markSettingsWindowShownOnFirstLaunch() {
         set("settingsWindowShownOnFirstLaunch", "true", false)

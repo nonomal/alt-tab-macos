@@ -24,6 +24,11 @@ struct UsageStats {
     private static var cache = [String: [Int]]()
     private static var dirty = Set<String>()
     private static var flushScheduled = false
+    #if DEBUG
+    /// Set by `QaSurfaces`, so the counts the About window and the Pro prompts quote are the same on every run.
+    /// Read in place of what is stored; recording still goes to the real arrays.
+    static var qaPinned: [String: [Int]]?
+    #endif
 
     static func recordTrigger(_ shortcutIndex: Int) {
         record("triggers")
@@ -37,7 +42,17 @@ struct UsageStats {
     static func recordSearchIfFirst() {
         guard !searchRecordedThisSession else { return }
         searchRecordedThisSession = true
+        SearchDiscoveryHint.shared.searchWasUsed()
         record("searches")
+    }
+
+    /// Read once off-main; malformed stored data remains unknown instead of advertising unused Search.
+    static func loadPreviousSearch(_ completion: @escaping (Bool?) -> Void) {
+        writeQueue.async {
+            let raw = defaults.object(forKey: "searches")
+            let used = raw == nil ? false : (raw as? [Int]).map { !$0.isEmpty }
+            DispatchQueue.main.async { completion(used) }
+        }
     }
 
     static func resetSession() {
@@ -112,6 +127,9 @@ struct UsageStats {
     }
 
     private static func loadOnQueue(_ key: String) -> [Int] {
+        #if DEBUG
+        if let qaPinned { return qaPinned[key] ?? [] }
+        #endif
         ensureLoadedOnQueue(key)
         return cache[key]!
     }
